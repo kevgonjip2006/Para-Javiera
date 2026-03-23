@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Para Javiera</title>
+    <style>
+        /* CSS: Asegura que el canvas ocupe toda la pantalla */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505; /* Fondo oscuro inicial */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="pinkboard"></canvas>
+
+    <script>
+        /* =========================================
+           CONFIGURACIÓN
+           ========================================= */
+        const config = {
+            particles: {
+                length: 12000,
+                duration: 3,
+                velocity: 120,
+                effect: -0.85,
+                size: 12,
+                colorNormal: '#f50b02'
+            },
+            mouse: { lerp: 0.1 },
+            text: {
+                message: "",
+                font: 'bold 20px Arial'
+            },
+            reveal: {
+                lines: [
+                    "Javiera, quiero agradecerte por enseñarme lo que es el amor.",
+                    "Nunca en mi vida había experimentado un enamoramiento tan intenso hacia una mujer.",
+                    "Tú hiciste una nueva versión de mí, aún estoy enamorado de ti.",
+                    "Cundo veo una foto tuya, me acuerdo de lo hermosa que eres, y de lo feliz que me hacías cada vez que te veía.",
+                    "Me costara superar nuestra ruptura, me culpo siempre de haberte perdido",
+                    "",
+                    "Recuerdo cuando me esperaste en el paradero de mi universidad, y llegamos super tarde a Rio bueno, jeje",
+                    "Contigo no contaba el tiempo, yo solo disfrutaba lo que hacias por mi.",
+                    "Cuando saliamos del turno y te acompañaba al terminal de buses, pero sin antes invitarte un café antes de que te fueras.",
+                    "Eres una mujer buena Javiera, el primer amor nunca se olvida.",
+                    "",
+                    "Te deseo éxito con Cristian, se ve un buen hombre.",
+                    "Admiro mucho tu fortaleza para seguir adelante, pese los malos momentos que se te cruzan .",
+                    "Sigue tu corazón Javiera... síguelo siempre, siguelo como el corazon que esta en la pantalla.",
+                    "",
+                    "Nunca te olvidaré. Gracias por todo.",
+                    "Te quiero ❤️"
+                ],
+                bgFont: "bold 20px Arial",
+                revealColor: "#ffffff"
+            }
+        };
+
+        /* =========================================
+           CLASES NÚCLEO
+           ========================================= */
+        class Point {
+            constructor(x = 0, y = 0) { this.x = x; this.y = y; }
+            clone() { return new Point(this.x, this.y); }
+            length(l) {
+                if (typeof l === "undefined") return Math.sqrt(this.x * this.x + this.y * this.y);
+                this.normalize(); this.x *= l; this.y *= l; return this;
+            }
+            normalize() { 
+                const len = this.length(); 
+                if (len !== 0) { this.x /= len; this.y /= len; }
+                return this; 
+            }
+        }
+
+        class Particle {
+            constructor() {
+                this.position = new Point();
+                this.velocity = new Point();
+                this.acceleration = new Point();
+                this.age = 0;
+            }
+            initialize(x, y, dx, dy) {
+                this.position.x = x; this.position.y = y;
+                this.velocity.x = dx; this.velocity.y = dy;
+                this.acceleration.x = dx * config.particles.effect;
+                this.acceleration.y = dy * config.particles.effect;
+                this.age = 0;
+            }
+            update(dt) {
+                this.position.x += this.velocity.x * dt;
+                this.position.y += this.velocity.y * dt;
+                this.velocity.x += this.acceleration.x * dt;
+                this.velocity.y += this.acceleration.y * dt;
+                this.age += dt;
+            }
+            draw(ctx, img) {
+                const ease = (t) => --t * t * t + 1;
+                const size = img.width * ease(this.age / config.particles.duration);
+                ctx.globalAlpha = 1 - this.age / config.particles.duration;
+                ctx.drawImage(img, this.position.x - size / 2, this.position.y - size / 2, size, size);
+            }
+        }
+
+        class ParticlePool {
+            constructor(length) {
+                this.particles = Array.from({ length }, () => new Particle());
+                this.firstActive = 0; this.firstFree = 0;
+                this.duration = config.particles.duration;
+            }
+            add(x, y, dx, dy) {
+                this.particles[this.firstFree].initialize(x, y, dx, dy);
+                this.firstFree = (this.firstFree + 1) % this.particles.length;
+                if (this.firstActive === this.firstFree) this.firstActive = (this.firstActive + 1) % this.particles.length;
+            }
+            update(dt) {
+                let i = this.firstActive;
+                while (i !== this.firstFree) {
+                    this.particles[i].update(dt);
+                    i = (i + 1) % this.particles.length;
+                }
+                while (this.particles[this.firstActive].age >= this.duration && this.firstActive !== this.firstFree) {
+                    this.firstActive = (this.firstActive + 1) % this.particles.length;
+                }
+            }
+            draw(ctx, img) {
+                let i = this.firstActive;
+                while (i !== this.firstFree) {
+                    this.particles[i].draw(ctx, img);
+                    i = (i + 1) % this.particles.length;
+                }
+            }
+        }
+
+        /* =========================================
+           EJECUCIÓN
+           ========================================= */
+        const canvas = document.getElementById('pinkboard');
+        const ctx = canvas.getContext('2d');
+        const particles = new ParticlePool(config.particles.length);
+        const particleRate = config.particles.length / config.particles.duration;
+        let time;
+
+        const interaction = {
+            targetX: window.innerWidth / 2,
+            targetY: window.innerHeight / 2,
+            currentX: window.innerWidth / 2,
+            currentY: window.innerHeight / 2,
+            active: false
+        };
+
+        const pointOnHeart = (t) => new Point(
+            160 * Math.pow(Math.sin(t), 3),
+            (130 * Math.cos(t) - 50 * Math.cos(2 * t) - 20 * Math.cos(3 * t) - 10 * Math.cos(4 * t) + 25) * 0.9
+        );
+
+        const imgRed = (() => {
+            const can = document.createElement("canvas");
+            const c = can.getContext("2d");
+            can.width = can.height = config.particles.size;
+            const grad = c.createRadialGradient(can.width/2, can.height/2, 0, can.width/2, can.height/2, can.width/2);
+            grad.addColorStop(0, 'white');
+            grad.addColorStop(0.3, config.particles.colorNormal);
+            grad.addColorStop(1, 'rgba(0,0,0,0)');
+            c.fillStyle = grad;
+            c.beginPath();
+            c.arc(can.width/2, can.height/2, can.width/2, 0, Math.PI*2);
+            c.fill();
+            const img = new Image(); img.src = can.toDataURL();
+            return img;
+        })();
+
+        const move = (e) => {
+            const r = canvas.getBoundingClientRect();
+            interaction.targetX = (e.clientX || (e.touches && e.touches[0].clientX)) - r.left;
+            interaction.targetY = (e.clientY || (e.touches && e.touches[0].clientY)) - r.top;
+            interaction.active = true;
+        };
+        window.addEventListener('mousemove', move);
+        window.addEventListener('touchmove', (e) => { e.preventDefault(); move(e); }, { passive: false });
+
+        function render() {
+            requestAnimationFrame(render);
+            const now = Date.now() / 1000;
+            const dt = now - (time || now);
+            time = now;
+
+            // Limpiar fondo
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.fillStyle = "#050505";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Suavizar movimiento
+            interaction.currentX += (interaction.targetX - interaction.currentX) * config.mouse.lerp;
+            interaction.currentY += (interaction.targetY - interaction.currentY) * config.mouse.lerp;
+
+            // Partículas
+            const amount = particleRate * dt;
+            for (let i = 0; i < amount; i++) {
+                const pos = pointOnHeart(Math.PI - 2 * Math.PI * Math.random());
+                const dir = pos.clone().length(config.particles.velocity);
+                particles.add(interaction.currentX + pos.x, interaction.currentY - pos.y, dir.x, -dir.y);
+            }
+
+            particles.update(dt);
+            particles.draw(ctx, imgRed);
+
+            // Capa de revelado de texto
+            ctx.save();
+            ctx.globalCompositeOperation = 'source-atop';
+            ctx.font = config.reveal.bgFont;
+            ctx.textAlign = 'center';
+            ctx.fillStyle = config.reveal.revealColor;
+            const lh = 30;
+            const startY = (canvas.height - (config.reveal.lines.length * lh)) / 2;
+            config.reveal.lines.forEach((l, i) => {
+                ctx.fillText(l, canvas.width / 2, startY + (i * lh));
+            });
+            ctx.restore();
+
+            // Texto flotante
+            ctx.globalCompositeOperation = 'source-over';
+            ctx.font = config.text.font;
+            ctx.fillStyle = "white";
+            ctx.textAlign = 'center';
+            const p = 1 + 0.05 * Math.sin(now * 5);
+            ctx.save();
+            ctx.translate(interaction.currentX, interaction.currentY);
+            ctx.scale(p, p);
+            ctx.fillText(config.text.message, 0, 0);
+            ctx.restore();
+        }
+
+        function resize() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.onresize = resize;
+        resize();
+        render();
+    </script>
+</body>
+</html>
